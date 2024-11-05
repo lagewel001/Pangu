@@ -152,7 +152,8 @@ class BottomUpParser(Model):
             EOS: str = '[SEP]',
             encoder_decoder: str = None,  # whether use pre-trained encoder-decoders (e.g., T5) for scoring
             em_augmentation: bool = False,  # whether consider programs equivalent to gold programs for training
-            dataset='grail'
+            dataset='grail',
+            using_hf=None  # dummy
     ) -> None:
         super().__init__(vocab)
         # Dense embedding of source vocab tokens.
