@@ -34,7 +34,11 @@ from allennlp.nn import util
 from allennlp.training.metrics import Average
 
 from transformers import BertTokenizer, RobertaTokenizer, T5Tokenizer, T5ForConditionalGeneration, AutoTokenizer
+from gliner import GLiNER
 
+
+# TODO: put somewhere sensible
+gliner_model = GLiNER.from_pretrained("urchade/gliner_medium-v2.1")
 
 # todo: in termination check, may also need to consider whether the highest program is a finalized/valid one
 
@@ -67,8 +71,10 @@ class Program:
                  height: int = -1,
                  execution: Union[Set, str] = None,
                  finalized: bool = False,
+                 unanswerable: bool = False,
                  dummy: bool = False,  # dummy programs that make no sense; only for training
-                 derivations: Dict = None):
+                 derivations: Dict = None,
+                 question: str = ''):
         """
         :param source: anchor entities/literals
         :param code: programs with readable entity names
@@ -86,8 +92,21 @@ class Program:
         self.height = height
         self.execution = execution
         self.finalized = finalized
+        self.unanswerable = unanswerable
         self.derivations = derivations  # (comments: I think derivations is only used for get reachable classes?)
         self.dummy = dummy
+
+        self.question = question
+
+    def grounding(self):
+        label_entity_map = {derivation.split('.')[-1]: derivation
+                            for source in self.derivations.values() for derivation in source}
+
+        # Perform entity prediction
+        entities = gliner_model.predict_entities(self.question[0], label_entity_map.keys(), threshold=0.15)
+
+        grounding = {label_entity_map[e['label']]: e['text'] for e in entities}
+        return grounding
 
     def execute(self, kb_engine=None):
         if kb_engine is None:  # for training
@@ -99,12 +118,17 @@ class Program:
                 self.execution = set()
         else:
             # isinstance(self.execution, str) for
-            if not isinstance(self.execution, set) and not isinstance(self.execution, str):
+            if self.unanswerable:
+                # "answer: For unanswerable questions it's NA. It can take two values, "0" for count questions and []
+                # for others. Othewise it's same as answer field in GrailQA.`"
+
+                # TODO: check if we have to manually set the answer to 0 for COUNT questions (how do we detect them?)
+                self.execution = set()  # empty answer
+            elif not isinstance(self.execution, set) and not isinstance(self.execution, str):
                 # self.execution = self.execution[0](*self.execution[1:])
                 processed_code_raw = postprocess_raw_code(self.code_raw)
                 sparql_query = lisp_to_sparql(processed_code_raw)
                 try:
-                    # execution = execute_query(sparql_query)
                     execution = kb_engine.execute_SPARQL(sparql_query)
                     if isinstance(execution, list):
                         execution = set(execution)
@@ -159,6 +183,7 @@ class BottomUpParser(Model):
         # Dense embedding of source vocab tokens.
         self._enc_dec = encoder_decoder
         self._EOS = EOS
+
         if self._enc_dec is None:
             self._source_embedder = source_embedder
             self._dropout = torch.nn.Dropout(p=dropout)
@@ -344,16 +369,19 @@ class BottomUpParser(Model):
                 #     print("for debugging")
                 if decoding_step == 0:
                     for i, en in enumerate(entity_name):
-                        ini_programs_i = self._computer.get_initial_programs(en, answer_types[i], gold_answer_type[i])
+                        ini_programs_i = self._computer.get_initial_programs(en, answer_types[i], gold_answer_type[i], question)
                         candidate_programs.append(ini_programs_i)
                 else:
                     for i in range(len(programs_indexed)):  # for i in range(batch_size)
                         candidate_programs_i = self._computer.get_admissible_programs(programs[decoding_step - 1][i],
                                                                                       programs_indexed[i],
+                                                                                      question,
                                                                                       entity_name[i]
                                                                                       )
                         candidate_programs.append(candidate_programs_i)
                         num_candidates += len(candidate_programs_i)
+
+                        candidate_programs_i[0].grounding()
 
                 if self.training and len(candidate_programs[0]) == 0:
                     # append gold programs for training
@@ -843,7 +871,7 @@ class BottomUpParser(Model):
         rtn = {}
         rtn['qid'] = ids
         rtn['logical_form'] = all_predicted_lfs
-        rtn['answer'] = all_predicted_answers
+        rtn['answer'] = all_predicted_answers  # TODO: maybe we need to set the answer to 0 here for unanswerable COUNT questions
 
         return rtn
 

@@ -314,7 +314,7 @@ class BottomUpParserGPT(Model):
             candidate_programs = []
             if decoding_step == 0:
                 for i, en in enumerate(entity_name):
-                    ini_programs_i = self._computer.get_initial_programs(en, answer_types[i], gold_answer_type[i])
+                    ini_programs_i = self._computer.get_initial_programs(en, answer_types[i], gold_answer_type[i], question)
                     new_ini_programs_i = []
                     for ip in ini_programs_i:
                         # if ip.function in ["AND", "JOIN"]:
@@ -330,6 +330,7 @@ class BottomUpParserGPT(Model):
                 for i in range(len(programs_indexed)):  # for i in range(batch_size)
                     candidate_programs_i = self._computer.get_admissible_programs(programs[decoding_step - 1][i],
                                                                                   programs_indexed[i],
+                                                                                  question,
                                                                                   entity_name[i]
                                                                                   )
                     # new_candidate_programs_i = []

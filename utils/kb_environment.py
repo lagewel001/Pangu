@@ -223,7 +223,7 @@ class Computer:
 
         if self.training and add_noise:
             if not self._dataset == 'grail':
-                rtn.update(random.sample(self._relations, 100))
+                rtn.update(random.sample(list(self._relations), 100))
             elif len(self._domains) > 0:
                 if random.random() > 0.5:
                     vocab = set()
@@ -231,7 +231,7 @@ class Computer:
                         vocab.update(self._domain_dict[d])
                     # rtn = rtn.intersection(vocab)
                     if len(vocab) > 100:
-                        rtn.update(random.sample(vocab, 100))
+                        rtn.update(random.sample(list(vocab), 100))
                     else:
                         rtn.update(vocab)
 
@@ -335,7 +335,7 @@ class Computer:
 
         if self.training and add_noise:
             if len(self._attributes) > 100:
-                rtn.update(random.sample(self._attributes, 100))
+                rtn.update(random.sample(list(self._attributes), 100))
             else:
                 rtn.update(self._attributes)
 
@@ -353,7 +353,7 @@ class Computer:
 
         if self.training and add_noise:
             if len(self._tc_attributes) > 100:
-                rtn.update(random.sample(self._tc_attributes, 100))
+                rtn.update(random.sample(list(self._tc_attributes), 100))
             else:
                 rtn.update(self._tc_attributes)
 
@@ -371,7 +371,7 @@ class Computer:
 
         if self.training and add_noise:
             if len(self._cons_attributes) > 100:
-                rtn.update(random.sample(self._cons_attributes, 100))
+                rtn.update(random.sample(list(self._cons_attributes), 100))
             else:
                 rtn.update(self._cons_attributes)
 
@@ -396,7 +396,7 @@ class Computer:
 
         if self.training and add_noise:
             if len(self._attributes) > 100:
-                rtn.update(random.sample(self._attributes, 100))
+                rtn.update(random.sample(list(self._attributes), 100))
             else:
                 rtn.update(self._attributes)
 
@@ -472,7 +472,7 @@ class Computer:
         if self.training and add_noise:
             if not self._dataset == "grail":
                 if len(self._classes) > 100:
-                    rtn.update(random.sample(self._classes, 100))
+                    rtn.update(random.sample(list(self._classes), 100))
                 else:
                     rtn.update(self._classes)
             elif len(self._domains) > 0:
@@ -482,7 +482,7 @@ class Computer:
                         vocab.update(self._domain_dict[d])
                     # rtn = rtn.intersection(vocab)
                     if len(vocab) > 100:
-                        rtn.update(random.sample(vocab, 100))
+                        rtn.update(random.sample(list(vocab), 100))
                     else:
                         rtn.update(vocab)
 
@@ -575,6 +575,7 @@ class Computer:
     # @timer
     def get_admissible_programs(self, programs: List[Program],
                                 programs_indexed: Dict[str, List[Program]],
+                                question: str,
                                 entity_name=None):
         """
         Given beam programs of the current decoding step, return all possible candidate programs of next step.
@@ -593,6 +594,10 @@ class Computer:
         for program in programs:
             if program.dummy:
                 continue
+            if program.unanswerable:
+                candidate_programs.append(program)
+                continue
+
             expression = lisp_to_nested_expression(program.code_raw)
             if (program.function == 'AND' and isinstance(expression[1], str)) \
                     or program.function == 'COUNT':
@@ -613,6 +618,7 @@ class Computer:
                                                       derivations=program.derivations,
                                                       height=program.height + 1,
                                                       execution=(self.execute_COUNT, program.execution),
+                                                      question=question,
                                                       finalized=True))
 
                     # handle superlatives
@@ -636,7 +642,8 @@ class Computer:
                                                               # derivations=_extend_deri(program.derivations,
                                                               #                          program.source, r),
                                                               height=program.height + 1,
-                                                              execution=(self.execute_JOIN, program.execution, r)
+                                                              execution=(self.execute_JOIN, program.execution, r),
+                                                              question=question,
                                                               ))
 
                     # possible_attributes = self.get_attributes_for_variables(program.execution)
@@ -655,6 +662,7 @@ class Computer:
                                                               height=program.height + 1,
                                                               finalized=True,
                                                               # execution=(self.execute_JOIN, program.execution, a)
+                                                              question=question,
                                                               ))
 
             elif program.function in ['ARGMAX', 'ARGMIN']:
@@ -684,7 +692,8 @@ class Computer:
                                                               #     program.source].append(
                                                               #     ':' + r[:-4] if r[-4:] == '_inv' else '^:' + r)},
                                                               height=program.height + 1,
-                                                              execution=execution))
+                                                              execution=execution,
+                                                              question=question,))
 
                         possible_attributes = self.get_attributes_for_class(arg_class)
                         for a in possible_attributes:
@@ -698,6 +707,7 @@ class Computer:
                                                               #     program.source].append(':' + a)},
                                                               height=program.height + 1,
                                                               # execution=(self.execute_JOIN, {v}, r),
+                                                              question=question,
                                                               finalized=True))
 
                     elif isinstance(program.execution, set):  # arg variable
@@ -716,6 +726,7 @@ class Computer:
                                                               # derivations=_extend_deri(program.derivations,
                                                               #                          program.source, r),
                                                               height=program.height + 1,
+                                                              question=question,
                                                               execution=(self.execute_JOIN, program.execution, r)))
 
                         possible_attributes = self.get_attributes_for_variables(program.execution)
@@ -731,6 +742,7 @@ class Computer:
                                                               #                          program.source, a),
                                                               height=program.height + 1,
                                                               finalized=True,
+                                                              question=question,
                                                               # execution=(self.execute_JOIN, program.execution, a)
                                                               ))
 
@@ -757,7 +769,8 @@ class Computer:
                                                                                program.source, r),
                                                       height=program.height + 1,
                                                       finalized=False if self._dataset != 'webq' else True,
-                                                      execution=(self.execute_JOIN, program.execution, r)))
+                                                      execution=(self.execute_JOIN, program.execution, r),
+                                                      question=question,))
                 if self.training:
                     if self._dataset != 'webq':
                         possible_types = self.get_classes_for_variables(program.execution)
@@ -789,6 +802,7 @@ class Computer:
                                                       derivations=program.derivations,
                                                       height=program.height + 1,
                                                       execution=(self.execute_AND, program.execution, t),
+                                                      question=question,
                                                       finalized=True))
 
                 # AND two subprograms
@@ -823,7 +837,8 @@ class Computer:
                                                                       function='AND',
                                                                       derivations=new_derivations,
                                                                       height=program.height + 1,
-                                                                      execution=execution))
+                                                                      execution=execution,
+                                                                      question=question,))
 
                 if self._dataset == 'webq':
                     possible_relations = self.get_relations_for_program(program, reverse=True)
@@ -845,7 +860,8 @@ class Computer:
                                                               # derivations=_extend_deri(program.derivations,
                                                               #                          program.source, r),
                                                               height=program.height + 1,
-                                                              execution=(self.execute_JOIN, program.execution, r)
+                                                              execution=(self.execute_JOIN, program.execution, r),
+                                                              question=question,
                                                               ))
 
                     # possible_attributes = self.get_attributes_for_variables(program.execution)
@@ -863,6 +879,7 @@ class Computer:
                                                               #                          program.source, a),
                                                               height=program.height + 1,
                                                               finalized=True,
+                                                              question=question,
                                                               # execution=(self.execute_JOIN, program.execution, a)
                                                               ))
 
@@ -878,7 +895,8 @@ class Computer:
                                                           derivations=program.derivations,
                                                           height=program.height + 1,
                                                           execution=program.execution,
-                                                          finalized=True))
+                                                          finalized=True,
+                                                          question=question,))
 
                     tc_constraints = self.get_tc_constraints_for_program(program)
                     for tc_cons in tc_constraints:
@@ -899,27 +917,39 @@ class Computer:
                                                               derivations=program.derivations,
                                                               height=program.height + 1,
                                                               execution=program.execution,
+                                                              question=question,
                                                               finalized=False))
                             # TC is typically applied to CVT, so finalized is False
 
         return candidate_programs
 
     # @timer
-    def get_initial_programs(self, entity_name, answer_types, gold_answer_type):
+    def get_initial_programs(self, entity_name, answer_types, gold_answer_type, question):
         if answer_types is None and self.training:
             # todo: sample hard negatives
             if self._dataset == 'gq1':
-                answer_types = set(random.sample(self._classes, 5))
+                answer_types = set(random.sample(list(self._classes), 5))
                 answer_types.add(gold_answer_type)
             elif self._dataset == 'grail':
                 at_domain = self._domain_info[gold_answer_type]
                 domain_types = set(self._domain_dict[at_domain]).intersection(self._classes)
                 if len(domain_types) > 5:
-                    answer_types = set(random.sample(domain_types, 5))
+                    answer_types = set(random.sample(list(domain_types), 5))
                 else:
                     answer_types = domain_types
                 answer_types.add(gold_answer_type)
-        initial_programs = []
+
+        # Add initial UNANSWERABLE program to the initial programs
+        initial_programs = [Program(
+            source=None,
+            code='NK',
+            code_raw='NK',
+            function=None,
+            finalized=True,
+            unanswerable=True,
+            question=question,
+        )]
+
         for v in entity_name:
             if v[:2] in ['m.', 'g.']:
                 possible_relations = self.get_relations_for_variables({v})
@@ -936,7 +966,8 @@ class Computer:
                                                     derivations={v: [':' + r[:-4] if r[-4:] == '_inv' else '^:' + r]},
                                                     height=0,
                                                     finalized=False if self._dataset != 'webq' else True,
-                                                    execution=(self.execute_JOIN, {v}, r)))
+                                                    execution=(self.execute_JOIN, {v}, r),
+                                                    question=question))
             else:
                 if self._dataset == 'webq':
                     if len(v) <= 2 and re.match('[\d]{1}', v):
@@ -965,7 +996,8 @@ class Computer:
                                                     derivations={v: ['^:' + r]},
                                                     height=0,
                                                     finalized=False if self._dataset != 'webq' else True,
-                                                    execution=(self.execute_JOIN, v, r)))
+                                                    execution=(self.execute_JOIN, v, r),
+                                                    question=question))
 
                 if self._dataset != "webq":
                     if not self._llm:
@@ -983,7 +1015,8 @@ class Computer:
                                                             function=comp,
                                                             derivations={v: (['^:' + r], comp)},
                                                             height=0,
-                                                            execution=(self.execute_Comparative, v, r, comp)))
+                                                            execution=(self.execute_Comparative, v, r, comp),
+                                                            question=question))
 
         # The following is for (ARGXXX Class_Name Relation/Attribute)
         if self._dataset == 'webq':
@@ -1010,7 +1043,8 @@ class Computer:
                                                     function=func,
                                                     derivations={at: [':' + r[:-4] if r[-4:] == '_inv' else '^:' + r]},
                                                     height=0,
-                                                    execution=execution))
+                                                    execution=execution,
+                                                    question=question))
 
             possible_attributes = self.get_attributes_for_class(at)
             for a in possible_attributes:
@@ -1024,6 +1058,7 @@ class Computer:
                                                     derivations={at: ['^:' + a]},
                                                     height=0,
                                                     # execution=(self.execute_JOIN, {v}, r),
+                                                    question=question,
                                                     finalized=True))
                 if self.training and len(entity_name) == 0:
                     # this program makes no sense; only used to provide negative samples for superlatives
@@ -1035,6 +1070,7 @@ class Computer:
                                                     function="JOIN",
                                                     derivations={at: ['^:' + a]},
                                                     height=0,
+                                                    question=question,
                                                     dummy=True))
                     code = f'(AND {at} (JOIN {a} {" ".join(at.split(".")[-1].split("_"))}))'
                     code_raw = code
@@ -1044,6 +1080,7 @@ class Computer:
                                                     function="AND",
                                                     derivations={at: ['^:' + a]},
                                                     height=0,
+                                                    question=question,
                                                     dummy=True))
 
         return initial_programs

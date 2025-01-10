@@ -1,0 +1,13 @@
+gliner==0.2.14
+sparqlwrapper==2.0.0
+spacy==3.8.3
+overrides==3.1.0
+boto3==1.35.95
+lmdb==1.6.2
+torchvision==0.20.1
+h5py==3.12.1
+nltk==3.9.1
+scipy==1.15.0
+scikit-learn==1.6.0
+tensorboardx==2.5
+jsonnet==0.20.0

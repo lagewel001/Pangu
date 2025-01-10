@@ -466,6 +466,11 @@ def lisp_to_sparql(lisp_program: str):
     identical_variables_r = {}  # key should be larger than value
     expression = lisp_to_nested_expression(lisp_program)
     superlative = False
+
+    if expression[0] in ['NK', '(N K)']:
+        raise RuntimeError(
+            "Expression of the type UNANSWERABLE should explicitly NOT be converted to SPARQL and executed.")
+
     if expression[0] in ['ARGMAX', 'ARGMIN']:
         superlative = True
         # remove all joins in relation chain of an arg function. In another word, we will not use arg function as
